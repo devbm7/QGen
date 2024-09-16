@@ -258,8 +258,12 @@ def save_to_json_file(data):
     filename = "feedback_data.json"  
 
     if os.path.exists(filename):  
-        with open(filename, "r") as f:  
-            existing_data = json.load(f)  
+        try:
+            with open(filename, "r") as f:  
+                existing_data = json.load(f)  
+        except (IOError, json.JSONDecodeError) as e:
+            print(f"Error reading file: {e}")
+            existing_data = []
     else:  
         existing_data = []  
 
