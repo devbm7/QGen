@@ -345,7 +345,21 @@ def segment_text(text, max_segment_length=700, batch_size=7):
     # Create batches
     batches = [segments[i:i + batch_size] for i in range(0, len(segments), batch_size)]
     return batches
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------
+# removing stopwords from extracted keywords 
 
+def remove_stopwords(keywords):
+    stop_words = set(stopwords.words('english'))
+    modified_keywords = [''.join(keyword.split()) for keyword in keywords]
+    filtered_keywords = [keyword for keyword in modified_keywords if keyword.lower() not in stop_words]
+    original_keywords = []
+    for keyword in filtered_keywords:
+        for original_keyword in keywords:
+            if ''.join(original_keyword.split()).lower() == keyword.lower():
+                original_keywords.append(original_keyword)
+                break
+    
+    return original_keywords
 
 # Function to extract keywords using combined techniques
 def extract_keywords(text, extract_all):
@@ -354,33 +368,31 @@ def extract_keywords(text, extract_all):
         labels = ["person", "organization", "email", "Award", "Date", "Competitions", "Teams", "location", "percentage", "money"]
         entities = gliner_model.predict_entities(text, labels, threshold=0.7)
     
-        gliner_keywords = list(set([ent["text"] for ent in entities]))
+        gliner_keywords = set(remove_stopwords([ent["text"] for ent in entities]))  # Convert to set
         print(f"Gliner keywords:{gliner_keywords}")
+        
         # Use Only Gliner Entities
         if extract_all is False:
-            return list(gliner_keywords) 
+            return list(gliner_keywords)
             
         doc = nlp(text)
-        spacy_keywords = set([ent.text for ent in doc.ents])
-        spacy_entities = spacy_keywords
-        print(f"\n\nSpacy Entities: {spacy_entities} \n\n")  
+        spacy_keywords = set(remove_stopwords([ent.text for ent in doc.ents]))  # Convert to set
+        print(f"\n\nSpacy Entities: {spacy_keywords} \n\n")  
 
-        # 
-        # if extract_all is False:
-        #     return list(spacy_entities) 
-        
         # Use RAKE
         rake = Rake()
         rake.extract_keywords_from_text(text)
-        rake_keywords = set(rake.get_ranked_phrases())
+        rake_keywords = set(remove_stopwords(rake.get_ranked_phrases()))  # Convert to set
         print(f"\n\nRake Keywords: {rake_keywords} \n\n")
+        
         # Use spaCy for NER and POS tagging
         spacy_keywords.update([token.text for token in doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"]])
         print(f"\n\nSpacy Keywords: {spacy_keywords} \n\n")
+        
         # Use TF-IDF
         vectorizer = TfidfVectorizer(stop_words='english')
         X = vectorizer.fit_transform([text])
-        tfidf_keywords = set(vectorizer.get_feature_names_out())
+        tfidf_keywords = set(remove_stopwords(vectorizer.get_feature_names_out()))  # Convert to set
         print(f"\n\nTFIDF Entities: {tfidf_keywords} \n\n")
 
         # Combine all keywords
@@ -389,6 +401,51 @@ def extract_keywords(text, extract_all):
         return list(combined_keywords)
     except Exception as e:
         raise QuestionGenerationError(f"Error in keyword extraction: {str(e)}")
+
+# ----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# # Function to extract keywords using combined techniques
+# def extract_keywords(text, extract_all):
+#     try:
+#         gliner_model = GLiNER.from_pretrained("knowledgator/gliner-multitask-large-v0.5")
+#         labels = ["person", "organization", "email", "Award", "Date", "Competitions", "Teams", "location", "percentage", "money"]
+#         entities = gliner_model.predict_entities(text, labels, threshold=0.7)
+    
+#         gliner_keywords = list(set([ent["text"] for ent in entities]))
+#         print(f"Gliner keywords:{gliner_keywords}")
+#         # Use Only Gliner Entities
+#         if extract_all is False:
+#             return list(gliner_keywords) 
+            
+#         doc = nlp(text)
+#         spacy_keywords = set([ent.text for ent in doc.ents])
+#         spacy_entities = spacy_keywords
+#         print(f"\n\nSpacy Entities: {spacy_entities} \n\n")  
+
+#         # 
+#         # if extract_all is False:
+#         #     return list(spacy_entities) 
+        
+#         # Use RAKE
+#         rake = Rake()
+#         rake.extract_keywords_from_text(text)
+#         rake_keywords = set(rake.get_ranked_phrases())
+#         print(f"\n\nRake Keywords: {rake_keywords} \n\n")
+#         # Use spaCy for NER and POS tagging
+#         spacy_keywords.update([token.text for token in doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"]])
+#         print(f"\n\nSpacy Keywords: {spacy_keywords} \n\n")
+#         # Use TF-IDF
+#         vectorizer = TfidfVectorizer(stop_words='english')
+#         X = vectorizer.fit_transform([text])
+#         tfidf_keywords = set(vectorizer.get_feature_names_out())
+#         print(f"\n\nTFIDF Entities: {tfidf_keywords} \n\n")
+
+#         # Combine all keywords
+#         combined_keywords = rake_keywords.union(spacy_keywords).union(tfidf_keywords).union(gliner_keywords)
+        
+#         return list(combined_keywords)
+#     except Exception as e:
+#         raise QuestionGenerationError(f"Error in keyword extraction: {str(e)}")
 
 def get_similar_words_sense2vec(word, n=3):
     # Try to find the word with its most likely part-of-speech
