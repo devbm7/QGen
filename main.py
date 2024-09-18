@@ -42,6 +42,8 @@ from email.mime.application import MIMEApplication
 from email import encoders
 # '------------------'
 from gliner import GLiNER
+# '------------------'
+from nltk.corpus import stopwords
 # -------------------
 from langchain_community.llms.ollama import Ollama
 print("***************************************************************")
