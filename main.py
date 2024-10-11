@@ -2,7 +2,7 @@ import streamlit as st
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 import spacy
 import nltk
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer 
 from rake_nltk import Rake
 import pandas as pd
 from fpdf import FPDF
@@ -42,11 +42,13 @@ from email.mime.application import MIMEApplication
 from email import encoders
 # '------------------'
 from gliner import GLiNER
+# -------------------
+from langchain_community.llms import Ollama
+import time
 # '------------------'
 from nltk.corpus import stopwords
-# -------------------
-from langchain_community.llms.ollama import Ollama
 print("***************************************************************")
+llm = Ollama(model='llama3:latest')
 
 st.set_page_config(
     page_icon='cyclone',
@@ -62,8 +64,6 @@ st.set_option('deprecation.showPyplotGlobalUse',False)
 class QuestionGenerationError(Exception):
     """Custom exception for question generation errors."""
     pass
-
-llm = Ollama(model='llama3.1:8b')
 
 
 # Initialize Wikipedia API with a user agent
@@ -168,22 +168,24 @@ def get_pdf_text(pdf_file):
         text += page.get_text()
     return text
 
-def save_feedback_og(question, answer, rating, options, context):
-    feedback_file = 'question_feedback.json'
+# def save_feedback_og(question, answer, rating, options, context):
+def save_feedback_og(feedback):
+
+    feedback_file = 'feedback_data.json'
     if os.path.exists(feedback_file):
         with open(feedback_file, 'r') as f:
             feedback_data = json.load(f)
     else:
         feedback_data = []
-    tpl = {
-        'question' : question,
-        'answer' : answer,
-        'context' : context,
-        'options' : options,
-        'rating' : rating,
-    }
+    # tpl = {
+    #     'question' : question,
+    #     'answer' : answer,
+    #     'context' : context,
+    #     'options' : options,
+    #     'rating' : rating,
+    # }
     # feedback_data[question] = rating
-    feedback_data.append(tpl)
+    feedback_data.append(feedback)
     print(feedback_data)
     with open(feedback_file, 'w') as f:
         json.dump(feedback_data, f)
@@ -235,6 +237,7 @@ def collect_feedback(i,question, answer, context, options):
 
     if st.button("Submit Feedback",key=f'fdx8{i}'):
         feedback = {
+            "context": context,
             "question": question,
             'edited_question':edited_question,
             "answer": answer,
@@ -246,33 +249,18 @@ def collect_feedback(i,question, answer, context, options):
             "overall_rating": overall_rating,
             "comments": comments
         }
-        save_feedback(feedback)
+        # save_feedback(feedback)
+        save_feedback_og(feedback)
         st.success("Thank you for your feedback!")
 
 # def save_feedback(feedback):
-#     st.session_state.feedback_data.append(feedback)
-def save_feedback(feedback):  
-    st.session_state.feedback_data.append(feedback)  
+#     st.session_state.feedback.append(feedback)
+    # feedback_file = 'question_feedback.json'
+    # with open(feedback_file, 'w') as f:
+    #     json.dump(feedback, f)
+    
+    # return feedback_file
 
-    save_to_json_file(st.session_state.feedback_data)  
-
-def save_to_json_file(data):  
-    filename = "feedback_data.json"  
-
-    if os.path.exists(filename):  
-        try:
-            with open(filename, "r") as f:  
-                existing_data = json.load(f)  
-        except (IOError, json.JSONDecodeError) as e:
-            print(f"Error reading file: {e}")
-            existing_data = []
-    else:  
-        existing_data = []  
-
-    existing_data.append(data[-1])  
- 
-    with open(filename, "w") as f:  
-        json.dump(existing_data, f, indent=2)  
 
 def analyze_feedback():
     if not st.session_state.feedback_data:
@@ -322,7 +310,7 @@ def export_feedback_data():
     
     return buffer
 
-# Function to clean text
+# Function to clean text 
 def clean_text(text):
     text = re.sub(r"[^\x00-\x7F]", " ", text)
     text = re.sub(f"[\n]"," ", text)
@@ -346,9 +334,7 @@ def segment_text(text, max_segment_length=700, batch_size=7):
     
     # Create batches
     batches = [segments[i:i + batch_size] for i in range(0, len(segments), batch_size)]
-    return batches
-# ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-# removing stopwords from extracted keywords 
+    return batches 
 
 def remove_stopwords(keywords):
     stop_words = set(stopwords.words('english'))
@@ -366,30 +352,39 @@ def remove_stopwords(keywords):
 # Function to extract keywords using combined techniques
 def extract_keywords(text, extract_all):
     try:
+        text = text.lower()
         gliner_model = GLiNER.from_pretrained("knowledgator/gliner-multitask-large-v0.5")
-        labels = ["person", "organization", "email", "Award", "Date", "Competitions", "Teams", "location", "percentage", "money"]
-        entities = gliner_model.predict_entities(text, labels, threshold=0.7)
+        # labels = ["person", "organization", "email", "Award", "Date", "Competitions", "Teams", "location", "percentage", "money"]
+        labels = ["person", "organization", "phone number", "address","email", "date of birth", 
+                  "mobile phone number", "medication", "ip address", "email address", 
+                  "landline phone number", "blood type", "digital signature", "postal code", 
+                  "date"]
+        entities = gliner_model.predict_entities(text, labels, threshold=0.5)
     
         gliner_keywords = set(remove_stopwords([ent["text"] for ent in entities]))  # Convert to set
         print(f"Gliner keywords:{gliner_keywords}")
         
         # Use Only Gliner Entities
-        if extract_all is False:
-            return list(gliner_keywords)
+        # if extract_all is False:
+        #     return list(gliner_keywords)
             
         doc = nlp(text)
         spacy_keywords = set(remove_stopwords([ent.text for ent in doc.ents]))  # Convert to set
         print(f"\n\nSpacy Entities: {spacy_keywords} \n\n")  
-
+        
+        # Use spaCy for NER and POS tagging
+        spacy_keywords.update([token.text for token in doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"]])
+        print(f"\n\nSpacy Keywords: {spacy_keywords} \n\n")
+        
+        if extract_all is False:
+            spacy_keywords.union(gliner_keywords)
+            return list(spacy_keywords)
+        
         # Use RAKE
         rake = Rake()
         rake.extract_keywords_from_text(text)
         rake_keywords = set(remove_stopwords(rake.get_ranked_phrases()))  # Convert to set
         print(f"\n\nRake Keywords: {rake_keywords} \n\n")
-        
-        # Use spaCy for NER and POS tagging
-        spacy_keywords.update([token.text for token in doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"]])
-        print(f"\n\nSpacy Keywords: {spacy_keywords} \n\n")
         
         # Use TF-IDF
         vectorizer = TfidfVectorizer(stop_words='english')
@@ -404,8 +399,23 @@ def extract_keywords(text, extract_all):
     except Exception as e:
         raise QuestionGenerationError(f"Error in keyword extraction: {str(e)}")
 
-# ----------------------------------------------------------------------------------------------------------------------------------------------------------------
+# # -----------------------------------------------------------
+# def remove_stopwords(keywords):
+#     stop_words = set(stopwords.words('english'))
+#     modified_keywords = [''.join(keyword.split()) for keyword in keywords]
+#     filtered_keywords = [keyword for keyword in modified_keywords if keyword.lower() not in stop_words]
+#     original_keywords = []
+#     for keyword in filtered_keywords:
+#         for original_keyword in keywords:
+#             if ''.join(original_keyword.split()).lower() == keyword.lower():
+#                 original_keywords.append(original_keyword)
+#                 break
+    
+#     return original_keywords
 
+
+
+# # -----------------------------------------------------------
 # # Function to extract keywords using combined techniques
 # def extract_keywords(text, extract_all):
 #     try:
@@ -414,6 +424,7 @@ def extract_keywords(text, extract_all):
 #         entities = gliner_model.predict_entities(text, labels, threshold=0.7)
     
 #         gliner_keywords = list(set([ent["text"] for ent in entities]))
+#         gliner_keywords = remove_stopwords(gliner_keywords)
 #         print(f"Gliner keywords:{gliner_keywords}")
 #         # Use Only Gliner Entities
 #         if extract_all is False:
@@ -421,7 +432,7 @@ def extract_keywords(text, extract_all):
             
 #         doc = nlp(text)
 #         spacy_keywords = set([ent.text for ent in doc.ents])
-#         spacy_entities = spacy_keywords
+#         spacy_entities = remove_stopwords(spacy_keywords)
 #         print(f"\n\nSpacy Entities: {spacy_entities} \n\n")  
 
 #         # 
@@ -432,6 +443,7 @@ def extract_keywords(text, extract_all):
 #         rake = Rake()
 #         rake.extract_keywords_from_text(text)
 #         rake_keywords = set(rake.get_ranked_phrases())
+#         rake_keywords = remove_stopwords(rake_keywords)
 #         print(f"\n\nRake Keywords: {rake_keywords} \n\n")
 #         # Use spaCy for NER and POS tagging
 #         spacy_keywords.update([token.text for token in doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"]])
@@ -440,6 +452,7 @@ def extract_keywords(text, extract_all):
 #         vectorizer = TfidfVectorizer(stop_words='english')
 #         X = vectorizer.fit_transform([text])
 #         tfidf_keywords = set(vectorizer.get_feature_names_out())
+#         tfidf_keywords = remove_stopwords(tfidf_keywords)
 #         print(f"\n\nTFIDF Entities: {tfidf_keywords} \n\n")
 
 #         # Combine all keywords
@@ -472,6 +485,29 @@ def get_synonyms(word, n=3):
                 if len(synonyms) == n:
                     return synonyms
     return synonyms
+
+def gen_options(answer,context,question):
+    prompt=f'''Given the following context, question, and correct answer, 
+    generate {4} incorrect but plausible answer options. The options should be:
+    1. Contextually related to the given context
+    2. Grammatically consistent with the question
+    3. Different from the correct answer
+    4. Not explicitly mentioned in the given context
+
+    Context: {context}
+    Question: {question}
+    Correct Answer: {answer}
+
+    Provide the options in a semi colon-separated list. Output must contain only the options and nothing else.
+    '''
+    options= [answer]
+    response = llm.invoke(prompt, stop=['<|eot_id|>'])
+    incorrect_options = [option.strip() for option in response.split(';')]
+    options.extend(incorrect_options)
+    random.shuffle(options)
+    print(options)
+    return options
+    # print(response)
 
 def generate_options(answer, context, n=3):
     options = [answer]
@@ -552,6 +588,7 @@ async def generate_question_async(context, answer, num_beams):
         outputs = await asyncio.to_thread(model.generate, input_ids, num_beams=num_beams, early_stopping=True, max_length=250)
         question = tokenizer.decode(outputs[0], skip_special_tokens=True)
         print(f"\n{question}\n")
+        # print(type(question))
         return question
     except Exception as e:
         raise QuestionGenerationError(f"Error in question generation: {str(e)}")
@@ -589,36 +626,6 @@ async def generate_options_async(answer, context, n=3):
     except Exception as e:
         raise QuestionGenerationError(f"Error in generating options: {str(e)}")
 
-async def gen_options(answer,context,question):
-    try:
-        prompt = f'''Given the following context, question, and correct answer, 
-        generate {3} incorrect but plausible answer options.
-        The options should be:
-        1. Contextually related to the given context
-        2. Grammatically consistent with the question
-        3. Different from the correct answer
-        4. Not explicitly mentioned in the given context
-        5. Options must be of same entity type as the answer. (i.e. options would be dates if answer is date, option should be Name if answer is name)
-        Provide the options in a semi colon-separated list. Output must contain only the options and nothing else.
-        Output must not contain markdown or description, only the option without numerically listing them.
-
-        CONTEXT: {context}
-        QUESTION: {question}
-        ANSWER: {answer}
-        
-        '''
-        options= [answer]
-        response = llm.invoke(prompt, stop=['<|eot_id|>'])
-        incorrect_options = [option.strip() for option in response.split(';')]
-        options.extend(incorrect_options)
-        options = options[:4]
-        random.shuffle(options)
-        print(options)
-        return options
-    except Exception as e:
-        raise QuestionGenerationError(f"Error in generating options: {str(e)}")
-
-
 
 # Function to generate questions using beam search
 async def generate_questions_async(text, num_questions, context_window_size, num_beams, extract_all_keywords):
@@ -627,14 +634,16 @@ async def generate_questions_async(text, num_questions, context_window_size, num
         keywords = extract_keywords(text, extract_all_keywords)
         all_questions = []
         
-        progress_bar = st.progress(0)
+        progress_bar = st.progress(0) 
         status_text = st.empty()
-
+        print("Final keywords:",keywords)
+        print("Number of questions that needs to be generated: ",num_questions)
         for i, batch in enumerate(batches):
             status_text.text(f"Processing batch {i+1} of {len(batches)}...")
-            batch_questions = await process_batch(batch, keywords, context_window_size, num_beams)
-            all_questions.extend(batch_questions)
+            batch_questions = await process_batch(batch, keywords, context_window_size, num_beams,num_questions)
+            all_questions.extend(batch_questions) 
             progress_bar.progress((i + 1) / len(batches))
+            print("Length of the all questions list: ",len(all_questions))
             
             if len(all_questions) >= num_questions:
                 break
@@ -658,14 +667,21 @@ async def generate_fill_in_the_blank_questions(context,answer):
     blank_q = context.replace(answer,replacedBlanks)
     return blank_q
 
-async def process_batch(batch, keywords, context_window_size, num_beams):
+async def process_batch(batch, keywords, context_window_size, num_beams, num_questions):
     questions = []
+    flag = False
     for text in batch:
+        if flag:
+            break
         keyword_sentence_mapping = map_keywords_to_sentences(text, keywords, context_window_size)
         for keyword, context in keyword_sentence_mapping.items():
+            print("Length of questions list from process batch function: ",len(questions))
+            if len(questions)>=num_questions:
+                flag = True
+                break
             question = await generate_question_async(context, keyword, num_beams)
-            options = await generate_options_async(keyword, context)
-            # options = await gen_options(keyword,context,question)
+            # options = await generate_options_async(keyword, context)
+            options = gen_options(keyword, context, question)
             blank_question = await generate_fill_in_the_blank_questions(context,keyword)
             overall_score, relevance_score, complexity_score, spelling_correctness = assess_question_quality(context, question, keyword)
             if overall_score >= 0.5:
@@ -686,7 +702,7 @@ async def process_batch(batch, keywords, context_window_size, num_beams):
 def export_to_csv(data):
     # df = pd.DataFrame(data, columns=["Context", "Answer", "Question", "Options"])
     df = pd.DataFrame(data)
-    # csv = df.to_csv(index=False,encoding='utf-8')
+    # csv = df.to_csv(index=False,encoding='utf-8') 
     csv = df.to_csv(index=False)
     return csv
 
@@ -751,7 +767,7 @@ def main():
         st.session_state.feedback_data = []
 
     with st.sidebar:
-        show_info = st.toggle('Show Info',True)
+        show_info = st.toggle('Show Info',False)
         if show_info:
             display_info()
         st.subheader("Customization Options")
@@ -760,9 +776,9 @@ def main():
         with st.expander("Choose the Additional Elements to show"):
             show_context = st.checkbox("Context",True)
             show_answer = st.checkbox("Answer",True)
-            show_options = st.checkbox("Options",False)
+            show_options = st.checkbox("Options",True)
             show_entity_link = st.checkbox("Entity Link For Wikipedia",True)
-            show_qa_scores = st.checkbox("QA Score",False)
+            show_qa_scores = st.checkbox("QA Score",True)
             show_blank_question = st.checkbox("Fill in the Blank Questions",True)
         num_beams = st.slider("Select number of beams for question generation", min_value=2, max_value=10, value=2)
         context_window_size = st.slider("Select context window size (number of sentences before and after)", min_value=1, max_value=5, value=1)
@@ -788,6 +804,7 @@ def main():
         text = clean_text(text)
     with st.expander("Show text"):
         st.write(text)
+        # st.text(text)
     generate_questions_button = st.button("Generate Questions",help="This is the generate questions button")
     # st.markdown('<span aria-label="Generate questions button">Above is the generate questions button</span>', unsafe_allow_html=True)
 
@@ -857,12 +874,23 @@ def main():
         # Export buttons
         # if st.session_state.generated_questions:
         if state['generated_questions']:
-            with st.sidebar:            
-                csv_data = export_to_csv(state['generated_questions'])
-                st.download_button(label="Download CSV", data=csv_data, file_name='questions.csv', mime='text/csv')
+            with st.sidebar:   
+                # Adding error handling while exporting the files 
+                # --------------------------------------------------------------------- 
+                try:
+                    csv_data = export_to_csv(state['generated_questions'])
+                    st.download_button(label="Download CSV", data=csv_data, file_name='questions.csv', mime='text/csv')
+                    pdf_data = export_to_pdf(state['generated_questions'])
+                    st.download_button(label="Download PDF", data=pdf_data, file_name='questions.pdf', mime='application/pdf')
+                except Exception as e:
+                    st.error(f"Error exporting CSV: {e}")
 
-                pdf_data = export_to_pdf(state['generated_questions'])
-                st.download_button(label="Download PDF", data=pdf_data, file_name='questions.pdf', mime='application/pdf')
+                # ---------------------------------------------------------------------
+                # csv_data = export_to_csv(state['generated_questions'])
+                # st.download_button(label="Download CSV", data=csv_data, file_name='questions.csv', mime='text/csv')
+
+                # pdf_data = export_to_pdf(state['generated_questions'])
+                # st.download_button(label="Download PDF", data=pdf_data, file_name='questions.pdf', mime='application/pdf')
 
             with st.expander("View Visualizations"):
                 questions = [tpl['question'] for tpl in state['generated_questions']]
