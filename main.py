@@ -309,13 +309,20 @@ def export_feedback_data():
     buffer.seek(0)
     
     return buffer
-
+# ---------------------------------------------------------------------
 # Function to clean text 
+# updated clean_text function
 def clean_text(text):
-    text = re.sub(r"[^\x00-\x7F]", " ", text)
-    text = re.sub(f"[\n]"," ", text)
+    text = re.sub(r"[^\x00-\x7F]", " ", text)  # Replace non-ASCII characters
+    text = re.sub(r"[\n]", " ", text)  # Replace newline characters
+    text = re.sub(r'\s+', ' ', text).strip()  # Remove extra spaces
+    text = re.sub(r'[“”]', '"', text)  # Replace fancy double quotes with straight double quotes
+    # Normalize curly single quotes to straight single quotes
+    text = re.sub(r"[‘’]", "'", text)  # Replace fancy single quotes with straight single quotes
+    text = text.replace('\xad', '')  # Remove soft hyphen
+    text = re.sub(r'[‒–—―]', '-', text)  # Replace various dashes with a hyphen
     return text
-
+# -----------------------------------------------------------------------
 # Function to create text chunks
 def segment_text(text, max_segment_length=700, batch_size=7):
     sentences = sent_tokenize(text)
