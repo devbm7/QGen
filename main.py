@@ -559,7 +559,7 @@ def generate_options(answer, context, n=3):
 
 # Function to map keywords to sentences with customizable context window size
 def map_keywords_to_sentences(text, keywords, context_window_size):
-    sentences = sent_tokenize(text)
+    sentences = sent_tokenize(text.lower())
     keyword_sentence_mapping = {}
     print(f"\n\nSentences: {sentences}\n\n")
     for keyword in keywords:
