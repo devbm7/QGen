@@ -1,13 +1,27 @@
-streamlit
-transformers
-torch
+streamlit==1.36.0
+asyncio==3.4.3
+transformers==4.39.3
+torch==2.3.1
 spacy>=3.0.0,<4.0.0
-nltk
-rake_nltk
-pandas
-fpdf
-wikipedia-api
-accelerate
-sentencepiece
-scikit-learn
+nltk==3.8.1
+rake_nltk==1.0.6
+pandas==1.5.3
+fpdf==1.7.2
+wikipedia-api==0.6.0
+accelerate==0.31.0
+sentencepiece==0.1.99
+scikit-learn==1.2.0
+sense2vec==2.0.2
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+en_core_web_md @ https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.7.1/en_core_web_md-3.7.1-py3-none-any.whl
+en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.1/en_core_web_lg-3.7.1-py3-none-any.whl
+wordcloud==1.9.3
+sentence-transformers==3.0.1
+textstat==0.7.3
+pyspellchecker==0.8.1
+pymupdf==1.24.7
+aiohttp==3.8.5
+secure-smtplib==0.1.1
+gliner==0.2.7
+langchain-community==0.0.24
+matplotlib==3.6.3
