@@ -7,6 +7,11 @@ nltk==3.8.1
 rake_nltk==1.0.6
 pandas==1.5.3
 fpdf==1.7.2
+lxml==4.9.2
+python-docx==1.1.0
+python-pptx==0.6.23
+pypandoc==1.14
+beautifulsoup4==4.11.1
 wikipedia-api==0.6.0
 accelerate==0.31.0
 sentencepiece==0.1.99
