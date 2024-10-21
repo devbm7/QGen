@@ -1,3 +1,8 @@
+import nltk
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('brown')
+nltk.download('wordnet')    
 import streamlit as st
 
 st.set_page_config(
@@ -9,8 +14,7 @@ st.set_page_config(
     }
 )
 
-
-from text_processing import clean_text, get_pdf_text
+from text_processing import clean_text, get_text_from_document
 from question_generation import generate_questions_async
 from visualization import display_word_cloud
 from data_export import export_to_csv, export_to_pdf
@@ -22,7 +26,6 @@ import pandas as pd
 from data_export import send_email_with_attachment
 
 st.set_option('deprecation.showPyplotGlobalUse',False)
-
 
 with st.sidebar:
     select_model = st.selectbox("Select Model", ("T5-large","T5-small"))
@@ -44,7 +47,7 @@ def main():
             display_info()
         st.subheader("Customization Options")
         # Customization options
-        input_type = st.radio("Select Input Preference", ("Text Input","Upload PDF"))
+        input_type = st.radio("Select Input Preference", ("Text Input","Upload Document"))
         with st.expander("Choose the Additional Elements to show"):
             show_context = st.checkbox("Context",False)
             show_answer = st.checkbox("Answer",True)
@@ -64,13 +67,13 @@ def main():
     text = None
     if input_type == "Text Input":
         text = st.text_area("Enter text here:", value="Joe Biden, the current US president is on a weak wicket going in for his reelection later this November against former President Donald Trump.", help="Enter or paste your text here")
-    elif input_type == "Upload PDF":
-        file = st.file_uploader("Upload PDF Files")
+    elif input_type == "Upload Document":
+        file = st.file_uploader("Upload Document File", type=['pdf', 'docx', 'doc', 'pptx', 'ppt', 'html', 'tex', 'txt'])
         if file is not None:
             try:
-                text = get_pdf_text(file)
+                text = get_text_from_document(file)
             except Exception as e:
-                st.error(f"Error reading PDF file: {str(e)}")
+                st.error(f"Error reading file: {str(e)}")
                 text = None
     if text:
         text = clean_text(text)
